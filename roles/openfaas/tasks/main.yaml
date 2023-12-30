@@ -1,0 +1,70 @@
+---
+
+- name: Wait for kube-system pods to be ready
+  shell: kubectl wait --namespace kube-system pods --all --field-selector=status.phase!=Succeeded --for=condition=Ready --timeout -1s
+  register: kube_system_pods_ready
+  retries: 10
+  delay: 3
+  until: kube_system_pods_ready.rc == 0
+
+- debug: var=kube_system_pods_ready.stdout_lines
+
+- name: Wait for kube-system jobs to finish
+  shell: kubectl wait --namespace kube-system jobs --all --for=condition=Complete --timeout -1s
+  register: kube_system_jobs_ready
+  retries: 10
+  delay: 3
+  until: kube_system_jobs_ready.rc == 0
+
+- debug: var=kube_system_jobs_ready.stdout_lines
+
+- name: Wait for NEW kube-system pods to be ready
+  shell: kubectl wait --namespace kube-system pods --all --field-selector=status.phase!=Succeeded --for=condition=Ready --timeout -1s
+  register: kube_system_pods_ready
+
+- debug: var=kube_system_pods_ready.stdout_lines
+
+- name: Wait for NEW kube-system jobs to finish
+  shell: kubectl wait --namespace kube-system jobs --all --for=condition=Complete --timeout -1s
+  register: kube_system_jobs_ready
+
+- debug: var=kube_system_jobs_ready.stdout_lines
+
+- name: Install faas-cli
+  shell: curl -sL https://cli.openfaas.com | sudo sh
+  changed_when: true
+  register: result
+  retries: 3
+  delay: 10
+  until: result.rc == 0
+
+- name: Install arkade
+  shell: curl -SLsf https://dl.get-arkade.dev/ | sudo sh
+  changed_when: true
+  register: result
+  retries: 3
+  delay: 10
+  until: result.rc == 0
+
+
+# use helm instead of arkade to avoid this sudo call
+- name: Install openfaas
+  shell: sudo arkade install openfaas
+  become_user: "{{ ansible_user }}"
+#  register: result
+#  retries: 3
+#  delay: 10
+#  until: result.rc == 0
+
+
+- name: Store password into file
+  shell: kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode > OpenFaasPW.txt
+  changed_when: true # changed_when: file changed
+
+- name: Fetch password file
+  fetch:
+    src: ~{{ ansible_user }}/OpenFaasPW.txt
+    dest: ./OpenFaasPW.txt
+    flat: yes
+
+...
